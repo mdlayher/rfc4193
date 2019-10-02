@@ -5,10 +5,17 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"time"
 )
+
+// ula is the IPv6 Unique Local Address prefix.
+var ula = &net.IPNet{
+	IP:   net.ParseIP("fc00::"),
+	Mask: net.CIDRMask(7, 128),
+}
 
 // A Prefix represents a Local IPv6 Unicast Address prefix, as described in
 // RFC 4193, section 3.1.
@@ -78,6 +85,34 @@ func (p *Prefix) Subnet(id uint16) *Prefix {
 
 // String returns the CIDR notation string for a Prefix.
 func (p *Prefix) String() string { return p.IPNet().String() }
+
+// Parse parses a /48 or /64 Prefix from a CIDR notation string. If s is not a
+// /48 or /64 IPv6 Unique Local Address prefix, it returns an error.
+func Parse(s string) (*Prefix, error) {
+	ip, cidr, err := net.ParseCIDR(s)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only accept IPv6 ULA /48 or /64 prefixes.
+	if ip.To16() == nil || ip.To4() != nil {
+		return nil, fmt.Errorf("rfc4193: invalid IPv6 address: %s", s)
+	}
+
+	ones, _ := cidr.Mask.Size()
+	if !cidr.IP.Equal(ip) || !ula.Contains(ip) || (ones != 48 && ones != 64) {
+		return nil, fmt.Errorf("rfc4193: must specify a Unique Local Address /48 or /64 IPv6 prefix: %s", s)
+	}
+
+	p := Prefix{
+		Local:    ip[0]&0x01 == 1,
+		SubnetID: binary.BigEndian.Uint16(ip[6:8]),
+		mask:     net.CIDRMask(ones, 128),
+	}
+	copy(p.GlobalID[:], ip[1:6])
+
+	return &p, nil
+}
 
 // Generate produces a /48 Prefix by using mac (typically the MAC address of a
 // network interface) as a seed. It uses the algorithm specified in RFC 4193,

@@ -214,6 +214,75 @@ func TestPrefixManual(t *testing.T) {
 	}
 }
 
+func TestParse(t *testing.T) {
+	tests := []struct {
+		name string
+		s    string
+		ok   bool
+	}{
+		{
+			name: "bad",
+			s:    "foo",
+		},
+		{
+			name: "IPv4",
+			s:    "192.0.2.0/24",
+		},
+		{
+			name: "individual IP",
+			s:    "fd00::1/64",
+		},
+		{
+			name: "global unicast prefix",
+			s:    "2001:db8::/32",
+		},
+		{
+			name: "wrong subnet size",
+			s:    "2001:db8::/56",
+		},
+		{
+			name: "local false /48",
+			s:    "fc01::/48",
+			ok:   true,
+		},
+		{
+			name: "local true /48",
+			s:    "fd02::/48",
+			ok:   true,
+		},
+		{
+			name: "local false /64",
+			s:    "fc03:0:0:1010::/64",
+			ok:   true,
+		},
+		{
+			name: "local true /64",
+			s:    "fd04:0:0:2020::/64",
+			ok:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := Parse(tt.s)
+			if tt.ok && err != nil {
+				t.Fatalf("failed to parse: %v", err)
+			}
+			if !tt.ok && err == nil {
+				t.Fatal("expected an error, but none occurred")
+			}
+			if err != nil {
+				t.Logf("err: %v", err)
+				return
+			}
+
+			if diff := cmp.Diff(tt.s, p.String()); diff != "" {
+				t.Fatalf("unexpected Prefix string (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func testPrefixes(t *testing.T, want, got *Prefix, parent *net.IPNet) {
 	t.Helper()
 
