@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -13,7 +14,21 @@ import (
 )
 
 func main() {
+	flag.Parse()
 	ll := log.New(os.Stderr, "", 0)
+
+	// If an argument is passed, parse it as a RFC4193 prefix.
+	if s := flag.Arg(0); s != "" {
+		p, err := rfc4193.Parse(s)
+		if err != nil {
+			ll.Fatalf("failed to parse: %v", err)
+		}
+
+		size, _ := p.IPNet().Mask.Size()
+		fmt.Printf("local: %v, global ID: %#0x, subnet ID: %#04x, prefix: /%d\n",
+			p.Local, p.GlobalID, p.SubnetID, size)
+		return
+	}
 
 	ifis, err := net.Interfaces()
 	if err != nil {
